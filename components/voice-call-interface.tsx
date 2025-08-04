@@ -16,6 +16,7 @@ import { createAIService } from '@/lib/ai-service';
 import { CallState, Message } from '@/types/call';
 import { Settings, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { uuidv4 } from '@/hooks/uuid';
 
 export const VoiceCallInterface: React.FC = () => {
   const [callState, setCallState] = useState<CallState>({
@@ -32,8 +33,9 @@ export const VoiceCallInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentTranscript, setCurrentTranscript] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
+  // const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
 
   const { duration, formattedDuration } = useCallTimer(callState.isActive);
 
@@ -42,7 +44,7 @@ export const VoiceCallInterface: React.FC = () => {
     
     if (result.isFinal && result.transcript.trim()) {
       const userMessage: Message = {
-        id: Date.now().toString(),
+        id: uuidv4(),
         text: result.transcript.trim(),
         speaker: 'user',
         timestamp: Date.now(),
@@ -52,9 +54,7 @@ export const VoiceCallInterface: React.FC = () => {
       setCurrentTranscript('');
       
       // Generate AI response
-      if (apiKey) {
-        generateAIResponse([...messages, userMessage]);
-      }
+      generateAIResponse([...messages, userMessage]);
     }
   }, [messages, apiKey]);
 
@@ -88,15 +88,14 @@ export const VoiceCallInterface: React.FC = () => {
     });
 
   const generateAIResponse = async (messageHistory: Message[]) => {
-    if (!apiKey) return;
-
     try {
+      setIsGeneratingResponse(true);
       stopListening();
-      const aiService = createAIService(apiKey);
+      const aiService = createAIService();
       const response = await aiService.generateResponse(messageHistory);
       
       const aiMessage: Message = {
-        id: Date.now().toString(),
+        id: uuidv4(),
         text: response,
         speaker: 'ai',
         timestamp: Date.now(),
@@ -107,16 +106,13 @@ export const VoiceCallInterface: React.FC = () => {
     } catch (error: any) {
       setError(`AI response error: ${error.message}`);
       setTimeout(() => setError(null), 5000);
+    } finally {
+      setIsGeneratingResponse(false);
     }
   };
 
   const handleStartCall = useCallback(() => {
-    if (!apiKey) {
-      setError('Please set your OpenAI API key in settings');
-      setShowSettings(true);
-      return;
-    }
-
+    setApiKey("array dependency")
     setCallState(prev => ({ 
       ...prev, 
       isActive: true, 
@@ -208,14 +204,14 @@ export const VoiceCallInterface: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">AI Voice Assistant</h1>
             <p className="text-gray-600">Have a natural conversation with AI</p>
           </div>
-          <Button
+          {/* <Button
             variant="outline"
             onClick={() => setShowSettings(!showSettings)}
             className="flex items-center space-x-2 text-gray-700 cursor-pointer"
           >
             <Settings className="w-4 h-4 " />
             <span>Settings</span>
-          </Button>
+          </Button> */}
         </div>
 
         {/* Error Alert */}
@@ -229,8 +225,7 @@ export const VoiceCallInterface: React.FC = () => {
         )}
 
         {/* Settings Panel */}
-        {showSettings && (
-          <Card>
+          {/* <Card>
             <CardContent className="p-6">
               <div className="space-y-4">
                 <div>
@@ -249,8 +244,7 @@ export const VoiceCallInterface: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
-        )}
+          </Card> */}
 
         {/* Main Call Interface */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -277,7 +271,8 @@ export const VoiceCallInterface: React.FC = () => {
                 {callState.isActive && (
                   <div className="text-center">
                     <p className="text-lg font-semibold text-gray-900">
-                      {callState.isSpeaking ? 'AI Speaking...' : 
+                      {isGeneratingResponse ? 'Generating response...' :
+                       callState.isSpeaking ? 'AI Speaking...' : 
                        isListening ? 'Listening...' : 
                        callState.isMuted ? 'Muted' : 'Ready'}
                     </p>
